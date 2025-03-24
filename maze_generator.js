@@ -1,9 +1,10 @@
 var canvas, ctx;
 var grid, gridSize;
-var mazeMatrix;
+var mazeMatrix, freeSpaces;
 var start, end;
-var pathId = 0
-var opposite_directions;
+var pathId;
+var oppositeDirections;
+var colors;
 
 function update() {
     ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
@@ -18,26 +19,19 @@ async function generate_maze(){
     // The same size as in CSS
     canvas.width = 800;
     canvas.height = 600;
-    grid = {horizontal: 80, vertical: 60}; 
+    grid = {horizontal: 40, vertical: 30}; //MAZE SIZE ----------------------------------------------------------------- 
     gridSize = Math.min(Math.floor(canvas.width / grid.horizontal), Math.floor(canvas.height / grid.vertical));
-
-    pathId = 0
-
-    // Initialize the mazeMatrix properly
-    mazeMatrix = Array.from({ length: grid.vertical }, () => 
-        Array.from({ length: grid.horizontal }, () => ({
-            //Parent tells a direction to a cell that created this cell
-            pathId: null,
-            parentDirection: null,
-            entrances: {
-                top: false, bottom: false, left: false, right: false
-            },
-            possibleDirections: {
-                top: true, bottom: true, left: true, right: true
-            }
-        }))
-    );
-
+    pathId = 0;
+    colors = ["#000000", "#5555ff"];
+    mazeMatrix = [];
+    freeSpaces = [];
+    for (let y = 0; y < grid.vertical; y++){
+        mazeMatrix.push([]);
+        for (let x = 0; x < grid.horizontal; x++){
+            mazeMatrix[y].push({pathId: null,parentDirection: null,entrances: {top: false, bottom: false, left: false, right: false},possibleDirections: {top: true, bottom: true, left: true, right: true}});
+            freeSpaces.push({x: x, y: y});
+        }
+    }
     // Ensures start and end aren't too close
     while (true){
         start = getRandomPosition();
@@ -48,21 +42,19 @@ async function generate_maze(){
 
     mazeMatrix[end.y][end.x].pathId = 0;
 
-    opposite_directions = {
+    oppositeDirections = {
         top: { x: 0, y: 1, name: "bottom"},
         bottom: { x: 0, y: -1, name: "top"},
         left: { x: 1, y: 0, name: "right"},
         right: { x: -1, y: 0, name: "left"}
     };
-    createRandomPath(start, true);
+    await createRandomPath(start, true);
     while (true){
         position = getRandomEmptyCell();
         if (position == null) break;
-        createRandomPath(position, false);
-        //await new Promise(r => setTimeout(r, 10));
-        drawGrid();
+        await createRandomPath(position, false);
     }
-
+    drawGrid();
 
 }
 
@@ -70,14 +62,17 @@ function getRandomEmptyCell() {
     // Flatten the mazeMatrix into an array of cells with their row and column indices
     const nullCells = [];
     
-    for (let row = 0; row < grid.vertical; row++) {
-      for (let col = 0; col < grid.horizontal; col++) {
-        if (mazeMatrix[row][col].pathId === null) {
-          nullCells.push({x: col, y: row});
+    i = 0;
+    while (true){
+        if (i == freeSpaces.length) break;
+        if (mazeMatrix[freeSpaces[i].y][freeSpaces[i].x].pathId != null){
+            freeSpaces.splice(i, 1)
+            continue
         }
-      }
+
+        nullCells.push(freeSpaces[i]);
+        i++;
     }
-    
 
     // If there are no cells with pathId = null, return null
     if (nullCells.length === 0) return null;
@@ -97,7 +92,7 @@ function drawGrid() {
             let y = j * gridSize;
 
             ctx.fillStyle = "gray"; 
-            if (mazeMatrix[j][i].pathId != null) ctx.fillStyle = "black";
+            if (mazeMatrix[j][i].pathId != null) ctx.fillStyle = colors[mazeMatrix[j][i].pathId];
             if (arePositionsOverlapping(start, {x: i, y: j})) ctx.fillStyle = "green";
             if (arePositionsOverlapping(end, {x: i, y: j})) ctx.fillStyle = "red";
 
@@ -148,6 +143,10 @@ async function createRandomPath(start){
     var possibleDirections = {}
     var currentPosition = {x: start.x, y: start.y};
     pathId += 1;
+
+    //Generates a random color in hex corresponding to a given id
+    colors.push("#" + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'))
+
     while (true){
         mazeMatrix[currentPosition.y][currentPosition.x].pathId = pathId;
         possibleDirections = removeImpossibleDirections(currentPosition);
@@ -161,7 +160,7 @@ async function createRandomPath(start){
         if (Object.values(mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections).every(value => value === false)){
             parentDirection = mazeMatrix[currentPosition.y][currentPosition.x].parentDirection;
             currentPosition = {x: currentPosition.x + parentDirection.x, y: currentPosition.y + parentDirection.y};
-            mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections[opposite_directions[parentDirection.name].name] = false;
+            mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections[oppositeDirections[parentDirection.name].name] = false;
 
             continue;
         }
@@ -170,13 +169,13 @@ async function createRandomPath(start){
         nextPosition = {x: currentPosition.x + direction.x, y: currentPosition.y + direction.y};
         // Opens a path in the current and the next position
         mazeMatrix[currentPosition.y][currentPosition.x].entrances[direction.name] = true;
-        mazeMatrix[nextPosition.y][nextPosition.x].entrances[opposite_directions[direction.name].name] = true;
+        mazeMatrix[nextPosition.y][nextPosition.x].entrances[oppositeDirections[direction.name].name] = true;
 
         // Sets the parent direction
-        mazeMatrix[nextPosition.y][nextPosition.x].parentDirection = opposite_directions[direction.name];
+        mazeMatrix[nextPosition.y][nextPosition.x].parentDirection = oppositeDirections[direction.name];
 
         // Removes the parent from possible directions
-        mazeMatrix[nextPosition.y][nextPosition.x].possibleDirections[opposite_directions[direction.name].name] = false;
+        mazeMatrix[nextPosition.y][nextPosition.x].possibleDirections[oppositeDirections[direction.name].name] = false;
 
         // Stops when reaching a goal (either reaching the end or any other pathj)
         if (mazeMatrix[nextPosition.y][nextPosition.x].pathId != null){
@@ -184,6 +183,10 @@ async function createRandomPath(start){
         }
 
         currentPosition = nextPosition;
+
+        //Comment these 2 lines to remove visualization
+        drawGrid();
+        await new Promise(r => setTimeout(r, 1));
     }
 }
 
