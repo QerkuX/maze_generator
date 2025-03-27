@@ -100,6 +100,7 @@ function drawGrid() {
 
             ctx.fillStyle = "gray"; 
             if (mazeMatrix[j][i].pathId != null) ctx.fillStyle = "black";//colors[mazeMatrix[j][i].pathId];
+            if (path.some(obj => obj.position.x === i && obj.position.y === j)) ctx.fillStyle = "blue";
             if (arePositionsOverlapping(start, {x: i, y: j})) ctx.fillStyle = "green";
             if (arePositionsOverlapping(end, {x: i, y: j})) ctx.fillStyle = "red";
 
