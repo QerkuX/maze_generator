@@ -1,114 +1,120 @@
 var canvas, ctx;
 var grid, gridSize;
-var mazeMatrix, freeSpaces;
-var start, end;
-var pathId;
-var oppositeDirections;
-var colors;
+var mazeGrid, availableSpaces;
+var startPosition, endPosition;
+var currentPathId;
+var oppositeDirectionMappings;
 var maze;
 
-function update() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear the canvas
-    drawGrid(); // Draw the grid
-    requestAnimationFrame(update); // Loop the update function at ~60fps
-}
-
-async function generateMaze(){
+async function generateMaze() {
     canvas = document.getElementById('myCanvas');
     ctx = canvas.getContext('2d');
 
-    // The same size as in CSS
+    // Set canvas size (same as defined in CSS)
     canvas.width = 800;
     canvas.height = 600;
-    grid = {horizontal: 40, vertical: 30}; //MAZE SIZE ----------------------------------------------------------------- 
+    grid = { horizontal: 32, vertical: 24 }; // MAZE SIZE (use 4:3 ratio and even numbers for correct scaling)
     gridSize = Math.min(Math.floor(canvas.width / grid.horizontal), Math.floor(canvas.height / grid.vertical));
-    pathId = 0;
-    colors = ["#000000", "#5555ff"];
-    mazeMatrix = [];
-    freeSpaces = [];
-    for (let y = 0; y < grid.vertical; y++){
-        mazeMatrix.push([]);
-        for (let x = 0; x < grid.horizontal; x++){
-            mazeMatrix[y].push({pathId: null,parentDirection: null,entrances: {top: false, bottom: false, left: false, right: false},possibleDirections: {top: true, bottom: true, left: true, right: true}});
-            freeSpaces.push({x: x, y: y});
+    currentPathId = 0;
+    mazeGrid = [];
+    availableSpaces = [];
+
+    // Reset the pathfinding algorithm variables
+    path = [];
+    finalPath = [];
+
+    // Initialize maze grid with default values
+    for (let y = 0; y < grid.vertical; y++) {
+        mazeGrid.push([]);
+        for (let x = 0; x < grid.horizontal; x++) {
+            mazeGrid[y].push({
+                pathId: null,
+                parentDirection: null,
+                entrances: { top: false, bottom: false, left: false, right: false },
+                possibleDirections: { top: true, bottom: true, left: true, right: true }
+            });
+            availableSpaces.push({ x: x, y: y });
         }
     }
-    // Ensures start and end aren't too close
-    while (true){
-        start = getRandomPosition();
-        end = getRandomPosition();
-        if (getDistance(start, end) < 10) continue;
+
+    // Ensure that start and end positions are not too close to each other
+    while (true) {
+        startPosition = getRandomPosition();
+        endPosition = getRandomPosition();
+        if (getDistance(startPosition, endPosition) < 10) continue;
         break;
     }
 
-    mazeMatrix[end.y][end.x].pathId = 0;
+    mazeGrid[endPosition.y][endPosition.x].pathId = 0;
 
-    oppositeDirections = {
-        top: { x: 0, y: 1, name: "bottom"},
-        bottom: { x: 0, y: -1, name: "top"},
-        left: { x: 1, y: 0, name: "right"},
-        right: { x: -1, y: 0, name: "left"}
+    oppositeDirectionMappings = {
+        top: { x: 0, y: 1, name: "bottom" },
+        bottom: { x: 0, y: -1, name: "top" },
+        left: { x: 1, y: 0, name: "right" },
+        right: { x: -1, y: 0, name: "left" }
     };
-    await createRandomPath(start, true);
-    while (true){
-        position = getRandomEmptyCell();
+
+    await createRandomPath(startPosition, true);
+
+    // Continue creating paths until no available empty cells
+    while (true) {
+        let position = getRandomEmptyCell();
         if (position == null) break;
         await createRandomPath(position, false);
     }
+
     drawGrid();
 
-    //Removes properties other than entrances
-    maze = mazeMatrix.map(row => row.map(cell => cell.entrances));
+    // Removes all properties other than entrances from the maze
+    maze = mazeGrid.map(row => row.map(cell => cell.entrances));
 
-    //Makes the "find the path" button pressable
-    if (document.getElementById("disabled")) document.getElementById("disabled").removeAttribute("id");
     return;
 }
 
 function getRandomEmptyCell() {
-    // Flatten the mazeMatrix into an array of cells with their row and column indices
+    // Uses a different array to store only empty cells, which makes the search faster
     const nullCells = [];
-    
-    i = 0;
-    while (true){
-        if (i == freeSpaces.length) break;
-        if (mazeMatrix[freeSpaces[i].y][freeSpaces[i].x].pathId != null){
-            freeSpaces.splice(i, 1)
-            continue
+    let i = 0;
+
+    while (true) {
+        if (i == availableSpaces.length) break;
+        if (mazeGrid[availableSpaces[i].y][availableSpaces[i].x].pathId != null) {
+            availableSpaces.splice(i, 1);
+            continue;
         }
 
-        nullCells.push(freeSpaces[i]);
+        nullCells.push(availableSpaces[i]);
         i++;
     }
 
-    // If there are no cells with pathId = null, return null
+    // Return a random empty cell, or null if no empty cells are found
     if (nullCells.length === 0) return null;
     
-    // Select a random cell
     const randomIndex = Math.floor(Math.random() * nullCells.length);
     return nullCells[randomIndex];
-  }
+}
 
 function drawGrid() {
     ctx.strokeStyle = "white"; 
-    ctx.lineWidth = 2; 
+    ctx.lineWidth = 2;
 
+    // Loop through each cell in the maze and draw it
     for (let j = 0; j < grid.vertical; j++) {
         for (let i = 0; i < grid.horizontal; i++) {
             let x = i * gridSize;
             let y = j * gridSize;
 
-            ctx.fillStyle = "gray"; 
-            if (mazeMatrix[j][i].pathId != null) ctx.fillStyle = "black";//colors[mazeMatrix[j][i].pathId];
-            if (path.some(obj => obj.position.x === i && obj.position.y === j)) ctx.fillStyle = "blue";
-            if (arePositionsOverlapping(start, {x: i, y: j})) ctx.fillStyle = "green";
-            if (arePositionsOverlapping(end, {x: i, y: j})) ctx.fillStyle = "red";
+            ctx.fillStyle = "black"; 
+            if (path.some(cell => cell.position.x === i && cell.position.y === j)) ctx.fillStyle = "#7B9EC6";
+            if (finalPath.some(cell => cell.x === i && cell.y === j)) ctx.fillStyle = "#8E44AD";
+            if (arePositionsOverlapping(startPosition, { x: i, y: j })) ctx.fillStyle = "#27AE60";
+            if (arePositionsOverlapping(endPosition, { x: i, y: j })) ctx.fillStyle = "#C0392B";
 
             ctx.fillRect(x, y, gridSize, gridSize);
 
-            let borders = mazeMatrix[j][i].entrances;
+            let borders = mazeGrid[j][i].entrances;
 
-            // Draw borders based on the conditions
+            // Draw borders for the current cell based on its entrances
             ctx.beginPath();
             if (!borders.top) {
                 ctx.moveTo(x, y);
@@ -131,113 +137,110 @@ function drawGrid() {
     }
 }
 
-
-function getRandomPosition(){
+function getRandomPosition() {
     let x = Math.floor(Math.random() * grid.horizontal);
     let y = Math.floor(Math.random() * grid.vertical);
-    return {x: x, y: y};
+    return { x: x, y: y };
 }
 
-function arePositionsOverlapping(first, second){
+function arePositionsOverlapping(first, second) {
     return first.x == second.x && first.y == second.y;
 }
 
-function getDistance(first, second){
+function getDistance(first, second) {
     return Math.sqrt(Math.pow(second.x - first.x, 2) + Math.pow(second.y - first.y, 2));
 }
 
-async function createRandomPath(start){
-    var direction = {};
-    var possibleDirections = {}
-    var currentPosition = {x: start.x, y: start.y};
-    pathId += 1;
+async function createRandomPath(startPosition, isInitialPath) {
+    let direction = {};
+    let possibleDirections = {};
+    let currentPosition = { x: startPosition.x, y: startPosition.y };
+    currentPathId += 1;
 
-    //Generates a random color in hex corresponding to a given id
-    colors.push("#" + Math.floor(Math.random() * 1000000).toString().padStart(6, '0'))
-
-    while (true){
-        mazeMatrix[currentPosition.y][currentPosition.x].pathId = pathId;
+    while (true) {
+        mazeGrid[currentPosition.y][currentPosition.x].pathId = currentPathId;
         possibleDirections = removeImpossibleDirections(currentPosition);
-        // Removes impossible directions
-        if (possibleDirections.top == undefined) mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections.top = false;
-        if (possibleDirections.bottom == undefined) mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections.bottom = false;
-        if (possibleDirections.left == undefined) mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections.left = false;
-        if (possibleDirections.right == undefined) mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections.right = false;
 
-        // If no direction is possible, go back
-        if (Object.values(mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections).every(value => value === false)){
-            parentDirection = mazeMatrix[currentPosition.y][currentPosition.x].parentDirection;
-            currentPosition = {x: currentPosition.x + parentDirection.x, y: currentPosition.y + parentDirection.y};
-            mazeMatrix[currentPosition.y][currentPosition.x].possibleDirections[oppositeDirections[parentDirection.name].name] = false;
+        // Mark impossible directions
+        if (possibleDirections.top == undefined) mazeGrid[currentPosition.y][currentPosition.x].possibleDirections.top = false;
+        if (possibleDirections.bottom == undefined) mazeGrid[currentPosition.y][currentPosition.x].possibleDirections.bottom = false;
+        if (possibleDirections.left == undefined) mazeGrid[currentPosition.y][currentPosition.x].possibleDirections.left = false;
+        if (possibleDirections.right == undefined) mazeGrid[currentPosition.y][currentPosition.x].possibleDirections.right = false;
 
+        // If no directions are possible, backtrack
+        if (Object.values(mazeGrid[currentPosition.y][currentPosition.x].possibleDirections).every(value => value === false)) {
+            let parentDirection = mazeGrid[currentPosition.y][currentPosition.x].parentDirection;
+            currentPosition = { x: currentPosition.x + parentDirection.x, y: currentPosition.y + parentDirection.y };
+            mazeGrid[currentPosition.y][currentPosition.x].possibleDirections[oppositeDirectionMappings[parentDirection.name].name] = false;
             continue;
         }
-        
-        direction = getRandomElement(possibleDirections)
-        nextPosition = {x: currentPosition.x + direction.x, y: currentPosition.y + direction.y};
-        // Opens a path in the current and the next position
-        mazeMatrix[currentPosition.y][currentPosition.x].entrances[direction.name] = true;
-        mazeMatrix[nextPosition.y][nextPosition.x].entrances[oppositeDirections[direction.name].name] = true;
 
-        // Sets the parent direction
-        mazeMatrix[nextPosition.y][nextPosition.x].parentDirection = oppositeDirections[direction.name];
+        direction = getRandomElement(possibleDirections);
+        let nextPosition = { x: currentPosition.x + direction.x, y: currentPosition.y + direction.y };
 
-        // Removes the parent from possible directions
-        mazeMatrix[nextPosition.y][nextPosition.x].possibleDirections[oppositeDirections[direction.name].name] = false;
+        // Create paths between current and next position
+        mazeGrid[currentPosition.y][currentPosition.x].entrances[direction.name] = true;
+        mazeGrid[nextPosition.y][nextPosition.x].entrances[oppositeDirectionMappings[direction.name].name] = true;
 
-        // Stops when reaching a goal (either reaching the end or any other pathj)
-        if (mazeMatrix[nextPosition.y][nextPosition.x].pathId != null){
+        // Set parent direction for the next cell
+        mazeGrid[nextPosition.y][nextPosition.x].parentDirection = oppositeDirectionMappings[direction.name];
+
+        // Remove the opposite direction from possible directions
+        mazeGrid[nextPosition.y][nextPosition.x].possibleDirections[oppositeDirectionMappings[direction.name].name] = false;
+
+        // Stop if we reach a goal (end point or another path)
+        if (mazeGrid[nextPosition.y][nextPosition.x].pathId != null) {
             break;
         }
 
         currentPosition = nextPosition;
 
-        //Comment these 2 lines to remove visualization
-        //drawGrid();
-        //await new Promise(r => setTimeout(r, 1));
+        //VISUALIZATION
+        drawGrid();
+        await new Promise(r => setTimeout(r, 1));
     }
 }
 
-function removeImpossibleDirections(currentPosition){
+function removeImpossibleDirections(currentPosition) {
     let possibleDirections = {
-        top: { x: 0, y: -1, name: "top"},
-        bottom: { x: 0, y: 1, name: "bottom"},
-        left: { x: -1, y: 0, name: "left"},
-        right: { x: 1, y: 0, name: "right"}
+        top: { x: 0, y: -1, name: "top" },
+        bottom: { x: 0, y: 1, name: "bottom" },
+        left: { x: -1, y: 0, name: "left" },
+        right: { x: 1, y: 0, name: "right" }
     };
-    
-    // Create an array of the directions' keys to loop through
+
+    // Loop through directions and remove invalid ones
     let directionsKeys = Object.keys(possibleDirections);
-    
-    // Loop through the directions and remove the invalid ones
+
     directionsKeys.forEach(directionKey => {
         let direction = possibleDirections[directionKey];
-    
-        // Check if next position is out of bounds
+
+        // Check for out of bounds
         if (currentPosition.x + direction.x < 0 || currentPosition.x + direction.x >= grid.horizontal ||
             currentPosition.y + direction.y < 0 || currentPosition.y + direction.y >= grid.vertical) {
-            delete possibleDirections[directionKey];  // Remove the direction if out of bounds
+            delete possibleDirections[directionKey]; // Remove out of bounds direction
             return;
         }
-    
-        // Check if next position is already part of the path
-        if (mazeMatrix[currentPosition.y + direction.y][currentPosition.x + direction.x].pathId == pathId) {
-            delete possibleDirections[directionKey];  // Remove the direction if itss already part of the path
+
+        // Check if the next position is part of the current path
+        if (mazeGrid[currentPosition.y + direction.y][currentPosition.x + direction.x].pathId == currentPathId) {
+            delete possibleDirections[directionKey]; // Remove already visited direction
             return;
         }
     });
 
-    return possibleDirections
+    return possibleDirections;
 }
 
 function getRandomElement(elements) {
-
     const keys = Object.keys(elements);
     const randomKey = keys[Math.floor(Math.random() * keys.length)];
     return elements[randomKey];
 }
 
-//Onload function for js placed in <body>
-// document.addEventListener("DOMContentLoaded", function() {
-//     generate_maze();
-// });
+function resetWebsite() {
+    window.location.reload(); // Reload the page to reset the maze
+}
+
+// On page load, generate the maze
+document.addEventListener("DOMContentLoaded", generateMaze)

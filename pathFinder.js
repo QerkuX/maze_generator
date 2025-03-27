@@ -1,59 +1,85 @@
-path = [];
+var path;
+var finalPath;
 
-function findPath(){
-    // If no maze was generated, exit
-    if (start == undefined) return;
-    var currentPosition = start;
+async function findPath() {
+    // If no maze has been generated or start position is undefined, exit the function
+    if (startPosition == undefined) return;
+
+    var currentPosition = startPosition;
     var directions;
-    var i = 0;
-    while (i < 1000){
-        i++;
+    path = [];
+
+    // Loop to explore the maze and create new paths
+    while (true) {
         directions = validateDirections(currentPosition);
 
         if (createNewPaths(currentPosition, directions)) break;
         currentPosition = chooseNextMove();
-        
+
+        //VISUALIZATION
+        drawGrid();
+        await new Promise(r => setTimeout(r, 1));
     }
-    console.log(path);
-    drawGrid();
+
+    // Trace back the final path from end to start
+    finalPath = [];
+    var currentPath = path[path.length - 1];
+    while (true) {
+        finalPath.push(currentPath.position);
+        currentPath = path.find(cell =>
+            cell.position.x == currentPath.position.x + currentPath.parentDirection.x &&
+            cell.position.y === currentPath.position.y + currentPath.parentDirection.y
+        );
+
+        if (currentPath === undefined || (startPosition.x == currentPath.position.x && startPosition.y == currentPath.position.y)) break;
+
+        //VISUALIZATION
+        drawGrid();
+        await new Promise(r => setTimeout(r, 1));
+    }
+
+    drawGrid(); // Draw the final path
 }
 
-function chooseNextMove(){
-    var smallestDistance = 999999;
+function chooseNextMove() {
+    var smallestDistance = 999;
     var smallestDistanceIndex = 0;
-    path.forEach(function(cell, index){
-        if (cell.distance < smallestDistance && cell.new){
+
+    // Find the cell with the smallest distance to the end
+    path.forEach(function (cell, index) {
+        if (cell.distance < smallestDistance && cell.new) {
             smallestDistance = cell.distance;
             smallestDistanceIndex = index;
         }
     });
 
+    // Mark the chosen cell as not new anymore
     path[smallestDistanceIndex].new = false;
     return path[smallestDistanceIndex].position;
 }
 
-function validateDirections(currentPosition){
+function validateDirections(currentPosition) {
     let possibleDirections = {
-        top: { x: 0, y: -1, name: "top"},
-        bottom: { x: 0, y: 1, name: "bottom"},
-        left: { x: -1, y: 0, name: "left"},
-        right: { x: 1, y: 0, name: "right"}
+        top: { x: 0, y: -1, name: "top" },
+        bottom: { x: 0, y: 1, name: "bottom" },
+        left: { x: -1, y: 0, name: "left" },
+        right: { x: 1, y: 0, name: "right" }
     };
-    
-    // Create an array of the directions' keys to loop through
+
+    // Create an array of the directions keys to loop through
     let directionsKeys = Object.keys(possibleDirections);
-    
+
     // Loop through the directions and remove the invalid ones
     directionsKeys.forEach(directionKey => {
         let direction = possibleDirections[directionKey];
-        
-        // Check if there is a wall
-        if (!maze[currentPosition.y][currentPosition.x][direction.name]){
+
+        // Check if there is a wall in the current direction
+        if (!maze[currentPosition.y][currentPosition.x][direction.name]) {
             delete possibleDirections[directionKey];
             return;
         }
 
-        // Check if next position is already part of the path
+        // Check if the next position is already part of the path
         if (path.some(cell => cell.position.x == currentPosition.x + direction.x && cell.position.y == currentPosition.y + direction.y)) {
             delete possibleDirections[directionKey];
             return;
@@ -63,25 +89,28 @@ function validateDirections(currentPosition){
     return possibleDirections;
 }
 
-function createNewPaths(currentPosition, directions){
+function createNewPaths(currentPosition, directions) {
     let directionsKeys = Object.keys(directions);
     var direction;
     var distance;
     var position;
     var parentDirection;
-    var found = false;
+    var directionKey;
 
-    // Calculates the distance from every direction to the end
-
-    directionsKeys.forEach(directionKey => {
+    // Calculate the distance from each possible direction to the end position
+    for (let i = 0; i < directionsKeys.length; i++) {
+        directionKey = directionsKeys[i];
         direction = directions[directionKey];
-        distance = getDistance({x: currentPosition.x + direction.x, y: currentPosition.y + direction.y}, end);
-        parentDirection = oppositeDirections[direction.name].name;
-        position = {x: currentPosition.x + direction.x, y: currentPosition.y + direction.y};
-        path.push({distance: distance, position: position, parentDirection: parentDirection, new: true});
+        position = { x: currentPosition.x + direction.x, y: currentPosition.y + direction.y };
+        distance = getDistance(position, endPosition);
+        parentDirection = oppositeDirectionMappings[direction.name];
+    
+        path.push({ distance: distance, position: position, parentDirection: parentDirection, new: true });
+    
+        // If we reached the end position, stop searching
+        if (distance == 0) return true;
+    }
+    
 
-        if (!found) found = distance == 0;
-    });
-
-    return found;
+    return false;
 }

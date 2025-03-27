@@ -5,14 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Canvas Website</title>
     <style>
+        *{
+            font-family: Helvetica;
+            color: white;
+        }
         body {
             margin: 0;
             padding: 0;
-            background-color: #111; /* Dark background */
-            height: 100vh; /* Full height */
+            background-color: #111;
+            height: 100vh;
             display: flex;
-            justify-content: center; /* Center the content horizontally */
-            align-items: center; /* Center the content vertically */
+            justify-content: center; 
+            align-items: center;
+        }
+
+        #title{
+            font-size: 3rem;
+            margin: 0;
         }
 
         #container {
@@ -39,7 +48,6 @@
         }
 
         button{
-            color: white;
             padding: 16px 32px;
             text-align: center;
             text-decoration: none;
@@ -54,22 +62,18 @@
           
         button:hover {
             background-color: #111;
-            color: white;
-        }
-
-        #disabled{
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-          
+        }     
+        
     </style>
 </head>
 <body>
     <div id="container">
+        <p id="title">Maze Generator & Solver</p>
+        <p >By Marek Qerku</p>
         <canvas id="myCanvas"></canvas> 
         <div id="buttons">
-            <button onclick="generateMaze()">Generate a maze</button>
-            <button id="disabled" onclick="findPath()">Find the path</button>
+            <button onclick="resetWebsite()">Generate a new maze</button>
+            <button onclick="findPath()">Find the path</button>
         </div>
     </div>
 
